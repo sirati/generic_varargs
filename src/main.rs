@@ -646,7 +646,7 @@ where
     }
 }*/
 
-mod bimap {
+/*mod bimap {
     use std::marker::Tuple;
     use crate::{GenericLinkedList, NumberTypeConstraint, TypeConstraint};
     use crate::bimap::private::Sealed;
@@ -685,7 +685,7 @@ mod same_type{
     impl<T: Same<T, T>> Sealed<T> for T{}
     impl<T> Same<T, T> for T{}
 }
-pub use same_type::Same;
+pub use same_type::Same;*/
 
 
 
