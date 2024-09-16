@@ -435,7 +435,7 @@ macro_rules! _tcon_type {
     };
 }
 
-macro_rules! _impl_into_for_tuple {
+/*macro_rules! _impl_into_for_tuple {
     // Base case for IntoInnerListEnd
     ($T:ident) => {
         #[allow(unused_parens)]
@@ -459,7 +459,7 @@ macro_rules! _impl_into_for_tuple {
         }
         _impl_into_for_tuple!($($Rest),+);
     };
-}
+}*/
 
 macro_rules! _impl_into_for_tuple_full_generic {
     // Base case for single element
@@ -478,6 +478,7 @@ macro_rules! _impl_from_for_tuple {
         #[allow(unused_parens)]
         impl<$T, TCon: TypeConstraint> From<($T,)> for GenericListEnd<$T, TCon>
         where $T: TypeConstraintImpl<TCon> {
+            #[inline(always)]
             fn from(tuple: ($T,)) -> Self {
                 GenericListEnd {
                     value: tuple.0,
@@ -491,6 +492,7 @@ macro_rules! _impl_from_for_tuple {
         #[allow(non_snake_case)]
         impl<$T, $($Rest),+, TCon: TypeConstraint> From<($T, $($Rest),+)> for _impl_into_for_tuple_full_generic!($T, $($Rest),+)
         where $T: TypeConstraintImpl<TCon>, $($Rest: TypeConstraintImpl<TCon>),+ {
+            #[inline(always)]
             fn from(tuple: ($T, $($Rest),+)) -> Self {
                 let (head, $($Rest),+) = tuple;
                 GenericListLink {
@@ -504,14 +506,56 @@ macro_rules! _impl_from_for_tuple {
     };
 }
 
+macro_rules! _impl_into_for_tuple {
+    // Base case for IntoInnerListEnd
+    ($T:ident) => {
+        #[allow(unused_parens)]
+        impl<$T, TCon: TypeConstraint> Into<($T,)> for GenericListEnd<$T, TCon>
+        where $T: TypeConstraintImpl<TCon> {
+            fn into(self) -> ($T,) {
+                (self.value,)
+            }
+        }
+    };
+    // Recursive case for IntoInnerListLink
+    ($T:ident, $($Rest:ident),+) => {
+        #[allow(non_snake_case)]
+        impl<$T, $($Rest),+, TCon: TypeConstraint> Into<($T, $($Rest),+)> for _impl_into_for_tuple_full_generic!($T, $($Rest),+)
+        where $T: TypeConstraintImpl<TCon>, $($Rest: TypeConstraintImpl<TCon>),+ {
+            _impl_into_for_tuple_direct_repacking!(self, ( $T, $($Rest),+), $T, $($Rest),+; );
+            /*fn into(self) -> ( $T, $($Rest),+) {
+                _impl_into_for_tuple_direct_repacking!(self, $T, $($Rest),+; )
+            }*/
+        }
+        _impl_into_for_tuple!($($Rest),+);
+    };
+}
 
+macro_rules! _impl_into_for_tuple_direct_repacking {
+    
+    ($Self:ident, $ReturnTy:ty , $T:ident, $($Rest:ident),+; ) => {
+        _impl_into_for_tuple_direct_repacking!($Self, $ReturnTy, ($Self.next), $($Rest),+; ($Self.value));
+    };
+    ($Self:ident, $ReturnTy:ty, $Prefix:tt,$T:ident, $($Rest:ident),+; $($Done:tt);+ ) => {
+        _impl_into_for_tuple_direct_repacking!($Self, $ReturnTy, ($Prefix.next), $($Rest),+; $($Done);+;  ($Prefix.value));
+    };
+    ($Self:ident, $ReturnTy:ty, $Prefix:tt, $T:ident; $($Done:tt);+ ) => {
+        fn into($Self) -> $ReturnTy {
+            ($($Done),+, $Prefix.value, )
+        }
+    };
+}
 
 //26 letters
 // _impl_from_for_tuple!(A, B, C);
 _impl_from_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 
 //26 letters
+//_impl_into_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 _impl_into_for_tuple!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
+
+
+//_impl_into_for_tuple_direct_repacking!(self, A, B, C, D; );
 
 
 
