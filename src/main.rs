@@ -626,8 +626,7 @@ where
         tuple.into()
     }
 }
-auto trait NotSinglet{}
-impl<T> !NotSinglet for (T,){}
+
 
 
 impl <TCon, TTuple, TLink> FromTupleConstrained<TCon, TTuple> for GenericLinkedListWrapper<TCon, TLink>
@@ -647,6 +646,49 @@ where
     }
 }*/
 
+mod bimap {
+    use std::marker::Tuple;
+    use crate::{GenericLinkedList, NumberTypeConstraint, TypeConstraint};
+    use crate::bimap::private::Sealed;
+
+    mod private {
+        use std::marker::Tuple;
+        use crate::{GenericLinkedList, GenericListEnd, GenericListLink, TypeConstraint, TypeConstraintImpl};
+        use crate::bimap::TupleGenericListBimap;
+
+        pub(super) trait Sealed{}
+
+        auto trait NotSinglet{}
+        impl<T> !NotSinglet for (T,){}
+        trait Singlet: Tuple{}
+        impl<T> Singlet for (T,){}
+        trait Multilet: Tuple + NotSinglet{}
+        impl<T: Tuple + NotSinglet> Multilet for T{}
+
+        impl<Con: TypeConstraint, T: TypeConstraintImpl<Con>, Next: GenericLinkedList<Con>> Sealed for GenericListLink<T, Con, Next> {}
+        impl<Tuple, Con, T, Next> TupleGenericListBimap<Tuple, GenericListLink<T, Con, Next>, Con> for GenericListLink<T, Con, Next>
+        where Tuple: Multilet, Con: TypeConstraint, T: TypeConstraintImpl<Con>, Next: GenericLinkedList<Con> {}
+        
+        impl<Con: TypeConstraint, T: TypeConstraintImpl<Con>> Sealed for GenericListEnd<T, Con> {}
+        impl<Con: TypeConstraint, T: TypeConstraintImpl<Con>> TupleGenericListBimap<(T, ), GenericListEnd<T, Con>, Con> for GenericListEnd<T, Con> {}
+        
+        
+    }
+
+    pub trait TupleGenericListBimap<T: Tuple, L:GenericLinkedList<Con>, Con: TypeConstraint>: Sealed + GenericLinkedList<Con>{}
+    pub trait Same<T1, T2>: Sealed{}
+}
+pub use bimap::TupleGenericListBimap;
+mod same_type{
+    trait Sealed<T>{}
+    pub trait Same<T1, T2>: Sealed<T1> + Sealed<T2>{}
+    impl<T: Same<T, T>> Sealed<T> for T{}
+    impl<T> Same<T, T> for T{}
+}
+pub use same_type::Same;
+
+
+
 
 pub trait GenericTuple<TGenericList: GenericLinkedList<TCon>, TCon: TypeConstraint> {
 }
@@ -655,9 +697,15 @@ pub struct NumberTuple<TGenericList: GenericLinkedList<NumberTypeConstraint>>(TG
 pub struct StringTuple<TGenericList: GenericLinkedList<SingleTypeConstraint<String>>>(TGenericList);
 
 impl<TGenericList: GenericLinkedList<NumberTypeConstraint>> NumberTuple<TGenericList> {
-    pub extern "rust-call" fn  new<T>(tuple: T) -> Self
-    where TGenericList: From<T>,
+    pub extern "rust-call" fn  new<T>(tuple: T) -> NumberTuple<TGenericList>
+    where TGenericList: From<T> + TupleGenericListBimap<T, TGenericList, NumberTypeConstraint>,
     T: std::marker::Tuple{
+        NumberTuple(TGenericList::from(tuple))
+    }
+
+    pub extern "rust-call" fn  new2<T>(tuple: T) -> NumberTuple<TGenericList>
+    where TGenericList: From<T>,
+          T: std::marker::Tuple{
         NumberTuple(TGenericList::from(tuple))
     }
     
