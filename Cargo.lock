@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "varargs"
+name = "generic_varargs"
 version = "0.1.0"
