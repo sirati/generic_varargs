@@ -348,11 +348,11 @@ impl<Tuple: TupleIntoList<List::GenericLinkedListTypeConstraint>, List: GenericL
     type TCon = List::GenericLinkedListTypeConstraint;
 }
 
-pub trait TupleIntoList<TCon: TypeConstraint>: Tuple + Sized 
+pub trait TupleIntoList<TCon: TypeConstraint>: Tuple + Sized
 {
     type List: GenericLinkedList<TCon> + FromTuple<Self, TCon = TCon>;
 
-    
+
     #[allow(clippy::wrong_self_convention)]
     extern "rust-call" fn into_generic_list(tuple: Self) -> Self::List;
 }

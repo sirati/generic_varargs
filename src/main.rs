@@ -1,10 +1,4 @@
 #![feature(fundamental)]
-#![allow(unused_qualifications)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(type_alias_impl_trait)]
-#![feature(trait_alias)]
-#![feature(negative_impls)]
-#![feature(auto_traits)]
 #![feature(unboxed_closures)]
 #![feature(tuple_trait)]
 #![feature(never_type)]
@@ -28,17 +22,8 @@ where List: From<T>{
 impl<T: Tuple + TupleListMatch<T, List, TCon>, List: GenericLinkedListFamily<GenericLinkedListSelfType=List, GenericLinkedListTypeConstraint=TCon>, TCon: TypeConstraint> TupleBiMap<TCon> for T{
     type GenericList = List;
 }*/
+mod same_type;
 
-
-mod same_type{
-    trait Sealed<T>: Sized{}
-    #[allow(private_bounds)]
-    pub trait Same<T1, T2>: Sealed<T1> + Sealed<T2>{}
-    pub trait SameSelf<TOther>: Same<TOther, Self> + Same<Self, TOther>{}
-    impl<T: Same<T, T>> Sealed<T> for T{}
-    impl<T: Same<T, T>> SameSelf<T> for T{}
-    impl<T> Same<T, T> for T{}
-}
 pub use same_type::{Same, SameSelf};
 
 

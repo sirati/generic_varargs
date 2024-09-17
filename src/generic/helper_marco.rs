@@ -42,7 +42,7 @@ macro_rules! _impl_from_for_tuple {
         #[allow(unused_parens)]
         impl<$T, TCon: TypeConstraint> From<($T,)> for GenericListEnd<$T, TCon>
         where $T: TypeConstraintImpl<TCon> {
-            #[inline(always)]
+            #[inline]
             fn from(tuple: ($T,)) -> Self {
                 <($T,)>::into_generic_list(tuple)
             }
@@ -52,7 +52,7 @@ macro_rules! _impl_from_for_tuple {
         where $T: TypeConstraintImpl<TCon> {
             type List = GenericListEnd<$T, TCon>;
             
-            #[inline(always)]
+            #[inline]
             extern "rust-call" fn into_generic_list(tuple: Self) -> Self::List {
                 GenericListEnd {
                     value: tuple.0,
@@ -66,7 +66,7 @@ macro_rules! _impl_from_for_tuple {
         #[allow(non_snake_case)]
         impl<$T, $($Rest),+, TCon: TypeConstraint> From<($T, $($Rest),+)> for _impl_into_for_tuple_full_generic!($T, $($Rest),+)
         where $T: TypeConstraintImpl<TCon>, $($Rest: TypeConstraintImpl<TCon>),+ {
-            #[inline(always)]
+            #[inline]
             fn from(tuple: ($T, $($Rest),+)) -> Self {
                 <($T, $($Rest),+)>::into_generic_list(tuple)
             }
@@ -77,7 +77,7 @@ macro_rules! _impl_from_for_tuple {
         where $T: TypeConstraintImpl<TCon>, $($Rest: TypeConstraintImpl<TCon>),+ {
             type List = _impl_into_for_tuple_full_generic!($T, $($Rest),+);
             
-            #[inline(always)]
+            #[inline]
             extern "rust-call" fn into_generic_list((head, $($Rest),+): Self) -> Self::List {
                 //let (head, $($Rest),+) = tuple;
                 GenericListLink {
