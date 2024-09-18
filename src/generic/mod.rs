@@ -36,6 +36,7 @@ pub trait FnSplitMap<T: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>> : F
 
 pub trait AccumFnMetaTrait {
     type Accumulator;
+    type Finalized;
     type TConFrom: TypeConstraint;
 }
 
@@ -43,6 +44,7 @@ pub trait FnAccumRef<T: TypeConstraintImpl<<Self as AccumFnMetaTrait>::TConFrom>
     type Next<U: TypeConstraintImpl<<Self as AccumFnMetaTrait>::TConFrom>>: FnAccumRef<U, TConFrom=<Self as AccumFnMetaTrait>::TConFrom, Accumulator=<Self as AccumFnMetaTrait>::Accumulator>;
 
     fn start(value: &T) -> Self::Accumulator;
+    fn finalize(accumulator: Self::Accumulator) -> Self::Finalized;
     fn call(value: &T, accumulator: Self::Accumulator) -> Self::Accumulator;
 }
 
@@ -294,8 +296,15 @@ where
         (Self::_create(value1, next1, Sealed {}),
          Self::_create(value2, next2, Sealed {}))
     }
+
+    fn accumulate_ref<F>(&self) -> F::Finalized
+    where
+        F: FnAccumRef<T, TConFrom=TCon>
+    {
+        F::finalize(self._accumulate_ref::<F>())
+    }
     
-    fn accumulate_ref<F>(&self) -> F::Accumulator
+    fn _accumulate_ref<F>(&self) -> F::Accumulator
     where
         F: FnAccumRef<T, TConFrom=TCon>
     {
@@ -303,12 +312,18 @@ where
         let start = F::start(value);
         match next {
             OptionalType::NoType(_) => start,
-            OptionalType::Type(next, _) => next.accumulate_ref_with::<F::Next<_>>(start)
+            OptionalType::Type(next, _) => next._accumulate_ref_with::<F::Next<_>>(start)
         }
     }
 
+    fn accumulate_ref_with<F>(&self, start: F::Accumulator) -> F::Finalized
+    where
+        F: FnAccumRef<T, TConFrom=TCon>
+    {
+        F::finalize(self._accumulate_ref_with::<F>(start))
+    }
 
-    fn accumulate_ref_with<F>(&self, mut start: F::Accumulator) -> F::Accumulator
+    fn _accumulate_ref_with<F>(&self, mut start: F::Accumulator) -> F::Accumulator
     where
         F: FnAccumRef<T, TConFrom=TCon>
     {
@@ -316,7 +331,7 @@ where
         start = F::call(value, start);
         match next {
             OptionalType::NoType(_) => start,
-            OptionalType::Type(next, _) => next.accumulate_ref_with::<F::Next<_>>(start)
+            OptionalType::Type(next, _) => next._accumulate_ref_with::<F::Next<_>>(start)
         }
     }
 }
