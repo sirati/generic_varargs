@@ -17,11 +17,35 @@ pub trait FnMetaTrait {
     type TMap: TypeMap<Self::TConFrom>;
     type TConFrom: TypeConstraint;
 }
+pub trait FnMetaTrait2: FnMetaTrait {
+    type TMap2: TypeMap<Self::TConFrom>;
+    
+}
 
 pub trait FnMap<T: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>> : FnMetaTrait {
     type Next<U: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>>: FnMap<U, TConFrom=<Self as FnMetaTrait>::TConFrom, TMap=<Self as FnMetaTrait>::TMap>;
     fn call(value: T) -> <<Self as FnMetaTrait>::TMap as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T>;
 }
+
+pub trait FnSplitMap<T: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>> : FnMetaTrait2 {
+    type Next<U: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>>: FnSplitMap<U, TConFrom=<Self as FnMetaTrait>::TConFrom, TMap=<Self as FnMetaTrait>::TMap, TMap2=<Self as FnMetaTrait2>::TMap2>;
+    #[allow(clippy::type_complexity)]
+    fn call(value: T) -> (<<Self as FnMetaTrait>::TMap as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T>,
+                          <<Self as FnMetaTrait2>::TMap2 as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T>);
+}
+
+pub trait AccumFnMetaTrait {
+    type Accumulator;
+    type TConFrom: TypeConstraint;
+}
+
+pub trait FnAccumRef<T: TypeConstraintImpl<<Self as AccumFnMetaTrait>::TConFrom>> : AccumFnMetaTrait {
+    type Next<U: TypeConstraintImpl<<Self as AccumFnMetaTrait>::TConFrom>>: FnAccumRef<U, TConFrom=<Self as AccumFnMetaTrait>::TConFrom, Accumulator=<Self as AccumFnMetaTrait>::Accumulator>;
+
+    fn start(value: &T) -> Self::Accumulator;
+    fn call(value: &T, accumulator: Self::Accumulator) -> Self::Accumulator;
+}
+
 
 trait TypeConstraintImplSealed<TCon: TypeConstraint>{}
 impl<T: TypeConstraintImpl<TCon>, TCon: TypeConstraint<Type<T>= T>> TypeConstraintImplSealed<TCon> for T{}
@@ -178,7 +202,7 @@ pub mod optional_type{
 
 
     #[allow(private_bounds)]
-    pub trait OptionalTypeMarker: Sealed + Sized{
+    pub trait OptionalTypeMarker: Sealed + Sized + Copy{
         type Opposite: OptionalTypeMarker<Opposite=Self, Existential=()>;
         type Existential: OptionalTypeMarker<Opposite=!, Existential=Self::Existential>;
         type TArg<T>;
@@ -189,6 +213,15 @@ pub mod optional_type{
     pub enum OptionalType<HasT:OptionalTypeMarker, T>{
         NoType(HasT::Opposite),
         Type(T, HasT),
+    }
+
+    impl<HasT: OptionalTypeMarker, T1, T2> OptionalType<HasT, (T1, T2)> {
+        pub fn split(self) -> (OptionalType<HasT, T1>, OptionalType<HasT, T2>) {
+            match self {
+                OptionalType::NoType(marker) => (OptionalType::NoType(marker), OptionalType::NoType(marker)),
+                OptionalType::Type((v1, v2), marker) => (OptionalType::Type(v1, marker), OptionalType::Type(v2, marker)),
+            }
+        }
     }
 
     impl<HasT: OptionalTypeMarker, T> OptionalType<HasT, T> {
@@ -246,8 +279,45 @@ where
         let value = F::call(value);
         let next = next.map(|next| next.map::<F::Next<_>>());
         Self::_create(value, next, Sealed {})
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn map_split<F>(self) -> (<Self as GenericLinkedList<TCon>>::LinkType<F::TMap>,
+                              <Self as GenericLinkedList<TCon>>::LinkType<F::TMap2>)
+    where
+        F: FnSplitMap<T, TConFrom=TCon>
+    {
+        let (value, next) = self.deconstruct();
+        let (value1, value2) = F::call(value);
+        let next = next.map(|next| next.map_split::<F::Next<_>>());
+        let (next1, next2) = next.split();
+        (Self::_create(value1, next1, Sealed {}),
+         Self::_create(value2, next2, Sealed {}))
+    }
+    
+    fn accumulate_ref<F>(&self) -> F::Accumulator
+    where
+        F: FnAccumRef<T, TConFrom=TCon>
+    {
+        let (value, next) = self.value_ref();
+        let start = F::start(value);
+        match next {
+            OptionalType::NoType(_) => start,
+            OptionalType::Type(next, _) => next.accumulate_ref_with::<F::Next<_>>(start)
+        }
+    }
 
 
+    fn accumulate_ref_with<F>(&self, mut start: F::Accumulator) -> F::Accumulator
+    where
+        F: FnAccumRef<T, TConFrom=TCon>
+    {
+        let (value, next) = self.value_ref();
+        start = F::call(value, start);
+        match next {
+            OptionalType::NoType(_) => start,
+            OptionalType::Type(next, _) => next.accumulate_ref_with::<F::Next<_>>(start)
+        }
     }
 }
 
@@ -268,8 +338,8 @@ where
     type TNext: GenericLinkedList<Self::TCon>;
     type THasNext: OptionalTypeMarker;
 
-    fn value_ref(&self) -> &T;
-    fn value_mut(&mut self) -> &mut T;
+    fn value_ref(&self) -> (&T, OptionalType<Self::THasNext, &Self::TNext>);
+    fn value_mut(&mut self) -> (&mut T, OptionalType<Self::THasNext, &mut Self::TNext>);
     fn deconstruct(self) -> (T, OptionalType<Self::THasNext, Self::TNext>);
 
 }
@@ -279,12 +349,12 @@ impl<T: TypeConstraintImpl<TCon>, TCon: TypeConstraint> GenericListValueBase<T> 
     type TNext = Self;
     type THasNext = !;
 
-    fn value_ref(&self) -> &T {
-        &self.value
+    fn value_ref(&self) -> (&T, OptionalType<Self::THasNext, &Self::TNext>) {
+        (&self.value, OptionalTypeMarker::new(()))
     }
 
-    fn value_mut(&mut self) -> &mut T {
-        &mut self.value
+    fn value_mut(&mut self) -> (&mut T, OptionalType<Self::THasNext, &mut Self::TNext>) {
+        (&mut self.value, OptionalTypeMarker::new(()))
     }
 
     fn deconstruct(self) -> (T, OptionalType<Self::THasNext, Self::TNext>)
@@ -306,13 +376,14 @@ where
     type TCon = TCon;
     type TNext = T2;
     type THasNext = ();
+    
 
-    fn value_ref(&self) -> &T {
-        &self.value
+    fn value_ref(&self) -> (&T, OptionalType<Self::THasNext, &Self::TNext>) {
+        (&self.value, OptionalTypeMarker::new(&self.next))
     }
 
-    fn value_mut(&mut self) -> &mut T {
-        &mut self.value
+    fn value_mut(&mut self) -> (&mut T, OptionalType<Self::THasNext, &mut Self::TNext>) {
+        (&mut self.value, OptionalTypeMarker::new(&mut self.next))
     }
 
     fn deconstruct(self) -> (T, OptionalType<Self::THasNext,  Self::TNext>) {
