@@ -16,6 +16,7 @@ pub trait TypeMap<TConFrom: TypeConstraint> {
 pub trait FnMetaTrait {
     type TMap: TypeMap<Self::TConFrom>;
     type TConFrom: TypeConstraint;
+    type OtherArgs;
 }
 pub trait FnMetaTrait2: FnMetaTrait {
     type TMap2: TypeMap<Self::TConFrom>;
@@ -23,14 +24,23 @@ pub trait FnMetaTrait2: FnMetaTrait {
 }
 
 pub trait FnMap<T: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>> : FnMetaTrait {
-    type Next<U: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>>: FnMap<U, TConFrom=<Self as FnMetaTrait>::TConFrom, TMap=<Self as FnMetaTrait>::TMap>;
-    fn call(value: T) -> <<Self as FnMetaTrait>::TMap as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T>;
+    type Next<U: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>>:
+    FnMap<U, 
+        TConFrom=<Self as FnMetaTrait>::TConFrom, 
+        OtherArgs=<Self as FnMetaTrait>::OtherArgs,
+        TMap=<Self as FnMetaTrait>::TMap>;
+    fn call(value: T, other_args: &Self::OtherArgs) -> <<Self as FnMetaTrait>::TMap as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T>;
 }
 
 pub trait FnSplitMap<T: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>> : FnMetaTrait2 {
-    type Next<U: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>>: FnSplitMap<U, TConFrom=<Self as FnMetaTrait>::TConFrom, TMap=<Self as FnMetaTrait>::TMap, TMap2=<Self as FnMetaTrait2>::TMap2>;
+    type Next<U: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>>: 
+    FnSplitMap<U, 
+        TConFrom=<Self as FnMetaTrait>::TConFrom,
+        OtherArgs=<Self as FnMetaTrait>::OtherArgs,
+        TMap=<Self as FnMetaTrait>::TMap, 
+        TMap2=<Self as FnMetaTrait2>::TMap2>;
     #[allow(clippy::type_complexity)]
-    fn call(value: T) -> (<<Self as FnMetaTrait>::TMap as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T>,
+    fn call(value: T, other_args: &Self::OtherArgs) -> (<<Self as FnMetaTrait>::TMap as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T>,
                           <<Self as FnMetaTrait2>::TMap2 as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T>);
 }
 
@@ -273,25 +283,25 @@ where
     TCon: TypeConstraint,
     T: TypeConstraintImpl<TCon>,
 {
-    fn map<F>(self) -> <Self as GenericLinkedList<TCon>>::LinkType<F::TMap>
+    fn map<F>(self, other_args: &F::OtherArgs) -> <Self as GenericLinkedList<TCon>>::LinkType<F::TMap>
     where
         F: FnMap<T, TConFrom=TCon>
     {
         let (value, next) = self.deconstruct();
-        let value = F::call(value);
-        let next = next.map(|next| next.map::<F::Next<_>>());
+        let value = F::call(value, other_args);
+        let next = next.map(|next| next.map::<F::Next<_>>(other_args));
         Self::_create(value, next, Sealed {})
     }
 
     #[allow(clippy::type_complexity)]
-    fn map_split<F>(self) -> (<Self as GenericLinkedList<TCon>>::LinkType<F::TMap>,
+    fn map_split<F>(self, other_args: &F::OtherArgs) -> (<Self as GenericLinkedList<TCon>>::LinkType<F::TMap>,
                               <Self as GenericLinkedList<TCon>>::LinkType<F::TMap2>)
     where
         F: FnSplitMap<T, TConFrom=TCon>
     {
         let (value, next) = self.deconstruct();
-        let (value1, value2) = F::call(value);
-        let next = next.map(|next| next.map_split::<F::Next<_>>());
+        let (value1, value2) = F::call(value, other_args);
+        let next = next.map(|next| next.map_split::<F::Next<_>>(other_args));
         let (next1, next2) = next.split();
         (Self::_create(value1, next1, Sealed {}),
          Self::_create(value2, next2, Sealed {}))
