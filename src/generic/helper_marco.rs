@@ -101,6 +101,11 @@ macro_rules! _impl_into_for_tuple {
                 (self.value,)
             }
         }
+        //ListIntoTuple
+        impl<$T, TCon: TypeConstraint> ListIntoTuple<TCon> for GenericListEnd<$T, TCon>
+        where $T: TypeConstraintImpl<TCon> {
+            type OriginalTuple = ($T,);
+        }
     };
     // Recursive case for IntoInnerListLink
     ($T:ident, $($Rest:ident),+) => {
@@ -111,6 +116,11 @@ macro_rules! _impl_into_for_tuple {
             /*fn into(self) -> ( $T, $($Rest),+) {
                 _impl_into_for_tuple_direct_repacking!(self, $T, $($Rest),+; )
             }*/
+        }
+        //ListIntoTuple
+        impl<$T, $($Rest),+, TCon: TypeConstraint> ListIntoTuple<TCon> for _impl_into_for_tuple_full_generic!($T, $($Rest),+)
+        where $T: TypeConstraintImpl<TCon>, $($Rest: TypeConstraintImpl<TCon>),+ {
+            type OriginalTuple = ($T, $($Rest),+);
         }
         _impl_into_for_tuple!($($Rest),+);
     };

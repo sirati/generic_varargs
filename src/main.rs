@@ -101,18 +101,19 @@ enum ToStringFn{}
 impl FnMetaTrait for ToStringFn {
     type TMap = Self;
     type TConFrom = NumberTypeConstraint;
+    type OtherArgs = ();
 }
 impl<T: TypeConstraintImpl<NumberTypeConstraint>> FnMap<T> for ToStringFn{
     default type Next<U: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>> = Self;
 
-    default fn call(_value: T) -> <<Self as FnMetaTrait>::TMap as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T> {
+    default fn call(_value: T, _: &()) -> <<Self as FnMetaTrait>::TMap as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T> {
         unreachable!()
     }
 }
 impl<T: NumberTypeConstraintImpl> FnMap<T> for ToStringFn{
     type Next<U: TypeConstraintImpl<<Self as FnMetaTrait>::TConFrom>> = Self;
 
-    fn call(value: T) -> <<Self as FnMetaTrait>::TMap as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T> {
+    fn call(value: T, _: &()) -> <<Self as FnMetaTrait>::TMap as TypeMap<<Self as FnMetaTrait>::TConFrom>>::TMap<T> {
         value.to_string()
     }
 }

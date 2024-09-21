@@ -100,6 +100,8 @@ pub trait GenericLinkedList<TCon: TypeConstraint> : GenericListValueBase<Self::I
     fn _create<Map: TypeMap<TCon>>(value: Map::TMap<Self::InnerType>, next: OptionalNodeMapped<Self, TCon, Map>, _: Sealed) -> Self::LinkType<Map>;
 }
 
+
+#[derive(Copy, Clone)]
 pub struct GenericListEnd<T, TCon>
 where
     <TCon as TypeConstraint>::Type<T>: TypeConstraintImpl<TCon>,
@@ -153,7 +155,7 @@ where
     }
 
 }
-
+#[derive(Copy, Clone)]
 pub struct GenericListLink<T, TCon, T2>
 where
     <TCon as TypeConstraint>::Type<T>: TypeConstraintImpl<TCon>,
@@ -283,25 +285,42 @@ where
     TCon: TypeConstraint,
     T: TypeConstraintImpl<TCon>,
 {
-    fn map<F>(self, other_args: &F::OtherArgs) -> <Self as GenericLinkedList<TCon>>::LinkType<F::TMap>
+
+    fn map<F>(self) -> <Self as GenericLinkedList<TCon>>::LinkType<F::TMap>
+    where
+        F: FnMap<T, TConFrom=TCon, OtherArgs=()>,
+    {
+        self.map_args::<F>(&())
+    }
+    
+    fn map_args<F>(self, other_args: &F::OtherArgs) -> <Self as GenericLinkedList<TCon>>::LinkType<F::TMap>
     where
         F: FnMap<T, TConFrom=TCon>
     {
         let (value, next) = self.deconstruct();
         let value = F::call(value, other_args);
-        let next = next.map(|next| next.map::<F::Next<_>>(other_args));
+        let next = next.map(|next| next.map_args::<F::Next<_>>(other_args));
         Self::_create(value, next, Sealed {})
     }
 
     #[allow(clippy::type_complexity)]
-    fn map_split<F>(self, other_args: &F::OtherArgs) -> (<Self as GenericLinkedList<TCon>>::LinkType<F::TMap>,
+    fn map_split<F>(self) -> (<Self as GenericLinkedList<TCon>>::LinkType<F::TMap>,
+                                                         <Self as GenericLinkedList<TCon>>::LinkType<F::TMap2>)
+    where
+        F: FnSplitMap<T, TConFrom=TCon, OtherArgs=()>
+    {
+        self.map_split_args::<F>(&())
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn map_split_args<F>(self, other_args: &F::OtherArgs) -> (<Self as GenericLinkedList<TCon>>::LinkType<F::TMap>,
                               <Self as GenericLinkedList<TCon>>::LinkType<F::TMap2>)
     where
         F: FnSplitMap<T, TConFrom=TCon>
     {
         let (value, next) = self.deconstruct();
         let (value1, value2) = F::call(value, other_args);
-        let next = next.map(|next| next.map_split::<F::Next<_>>(other_args));
+        let next = next.map(|next| next.map_split_args::<F::Next<_>>(other_args));
         let (next1, next2) = next.split();
         (Self::_create(value1, next1, Sealed {}),
          Self::_create(value2, next2, Sealed {}))
@@ -446,13 +465,17 @@ impl<Tuple: TupleIntoList<List::GenericLinkedListTypeConstraint>, List: GenericL
 
 pub trait TupleIntoList<TCon: TypeConstraint>: Tuple + Sized
 {
-    type List: GenericLinkedList<TCon> + FromTuple<Self, TCon = TCon>;
+    type List: GenericLinkedList<TCon> + FromTuple<Self, TCon = TCon> + ListIntoTuple<TCon, OriginalTuple=Self>;
 
 
     #[allow(clippy::wrong_self_convention)]
     extern "rust-call" fn into_generic_list(tuple: Self) -> Self::List;
 }
 
+pub trait ListIntoTuple<TCon: TypeConstraint>: GenericLinkedList<TCon> + Sized + Into<Self::OriginalTuple>
+{
+    type OriginalTuple: Tuple + TupleIntoList<TCon, List=Self>;
+}
 
 
 
